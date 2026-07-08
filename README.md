@@ -138,17 +138,3 @@ python ai_agent/agent_logic.py
 | Uso Avanzado de IA (Red Teamer + mitigación secundaria)| `ai_agent/` (servicio Flask embebido en docker-compose) + sección "Red Teamer Virtual" del dashboard, con recálculo en vivo de P(R_T) |
 | Refinamiento del Trabajo Parcial 1                    | Ya incorporado en el informe (`TRABAJO_SOFTWARE-nuevo.pdf`)          |
 
-## 6. Qué corregir tú mismo antes de sustentar (aporte humano)
-
-El código automatiza la ejecución, pero **la sustentación debe centrarse en las
-decisiones humanas** que el LLM no puede justificar por sí solo, por ejemplo:
-
-- Por qué elegiste HMAC como representación simplificada de mTLS este-oeste en vez
-  de certificados reales (trade-off de tiempo/alcance de la demo vs. fidelidad a
-  SP 800-204A).
-- Por qué el hash-chaining es una aproximación válida (aunque no idéntica) a un
-  almacén WORM real.
-- Cómo los números que salgan de `metrics/results.json` (blocked_ratio, tampering_success,
-  chain_valid) se comparan con las probabilidades P(B)=40.87% y P(C)=36.52% calculadas
-  en tu Nodo B y Nodo C del árbol de ataque — este es el argumento central que valida
-  tu modelo matemático con evidencia empírica real.
