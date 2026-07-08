@@ -1,0 +1,129 @@
+version: "3.9"
+
+# Mapeo directo a tu DFD Nivel 1:
+#   gateway    -> 1.1 API GATEWAY MICROSERVICE (Subnet Publica)
+#   core       -> 1.2 CORE PAYMENT MICROSERVICE (VPC Privada)
+#   identity   -> 1.3 SERVICIO DE VERIFICACION DE IDENTIDAD (mock RENIEC)
+#   db         -> D1 AMAZON RDS (Credit DB)
+#   logstore   -> D2 AUDIT LOGS STORE
+#   ai_agent   -> Red Teamer Virtual embebido (Uso Avanzado de IA, Anexo 4)
+#   dashboard  -> Validacion Analitica y Telemetria (Pre vs Post mitigacion)
+#
+# SECURE_MODE=false -> version VULNERABLE (para "The Break")
+# SECURE_MODE=true  -> version con controles aplicados (para "The Repair")
+# Cambia la variable abajo y corre: docker compose up --build
+
+x-secure-mode: &secure_mode ${SECURE_MODE:-false}
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: payme_rds
+    environment:
+      POSTGRES_USER: payme_admin
+      POSTGRES_PASSWORD: payme_pass_2026
+      POSTGRES_DB: creditdb
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - payme_db_data:/var/lib/postgresql/data
+    networks:
+      - payme_vpc_privada
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payme_admin -d creditdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  logstore:
+    build: ./logstore
+    container_name: payme_audit_logs
+    environment:
+      SECURE_MODE: *secure_mode
+    volumes:
+      - ./metrics:/app/metrics
+      - payme_logs_data:/app/data
+    ports:
+      - "5002:5000"
+    networks:
+      - payme_vpc_privada
+
+  identity:
+    build: ./identity
+    container_name: payme_identity_reniec_mock
+    environment:
+      SECURE_MODE: *secure_mode
+    networks:
+      - payme_vpc_privada
+    ports:
+      - "5003:5000"
+
+  core:
+    build: ./core
+    container_name: payme_core_payment
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SECURE_MODE: *secure_mode
+      DB_HOST: db
+      DB_NAME: creditdb
+      DB_USER: payme_admin
+      DB_PASSWORD: payme_pass_2026
+      LOGSTORE_URL: http://logstore:5000
+      IDENTITY_URL: http://identity:5000
+      HMAC_SHARED_SECRET: payme-east-west-shared-secret-2026
+    networks:
+      - payme_vpc_privada
+    ports:
+      - "5001:5000"
+
+  ai_agent:
+    build: ./ai_agent
+    container_name: payme_ai_red_teamer
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LOGSTORE_URL: http://logstore:5000
+    volumes:
+      - ./metrics:/app/metrics
+    networks:
+      - payme_vpc_privada
+    ports:
+      - "5004:5000"
+
+  gateway:
+    build: ./gateway
+    container_name: payme_api_gateway
+    depends_on:
+      - core
+    environment:
+      SECURE_MODE: *secure_mode
+      CORE_URL: http://core:5000
+      HMAC_SHARED_SECRET: payme-east-west-shared-secret-2026
+    networks:
+      - payme_dmz_publica
+      - payme_vpc_privada
+    ports:
+      - "8080:5000"
+
+  dashboard:
+    build: ./dashboard
+    container_name: payme_dashboard
+    environment:
+      AI_AGENT_URL: http://ai_agent:5000
+    volumes:
+      - ./metrics:/app/metrics:ro
+    networks:
+      - payme_dmz_publica
+      - payme_vpc_privada
+    ports:
+      - "8090:5000"
+
+networks:
+  payme_dmz_publica:
+    driver: bridge
+  payme_vpc_privada:
+    driver: bridge
+
+volumes:
+  payme_db_data:
+  payme_logs_data:

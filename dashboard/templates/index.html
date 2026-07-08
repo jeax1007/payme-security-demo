@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>PAYME // Validación Analítica de Riesgo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A1128; --panel:#101B36; --text:#E6E8EB; --muted:#8593B8;
+    --critical:#FF5C4D; --safe:#33D17A; --warn:#F2B84B; --line:#1E2F52;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--text); font-family:'Inter',sans-serif; padding:32px 24px 80px;
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(circle at 15% -10%, rgba(70,130,220,0.16), transparent 42%),
+      radial-gradient(circle at 90% 8%, rgba(51,209,122,0.07), transparent 40%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 42px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 42px),
+      linear-gradient(180deg, #0A1128 0%, #0D1A38 55%, #0A1128 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  header{display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid var(--line);
+    padding-bottom:20px; margin-bottom:28px; flex-wrap:wrap; gap:16px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.14em; color:var(--muted); text-transform:uppercase;}
+  h1{font-size:26px; margin:6px 0 0; font-weight:700; letter-spacing:-0.01em;}
+  .status-pill{font-family:'IBM Plex Mono',monospace; font-size:12px; padding:6px 12px; border:1px solid var(--line); border-radius:20px; color:var(--muted);}
+  .status-pill.live{color:var(--safe); border-color:var(--safe);}
+
+  .kpi-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:16px; margin-bottom:28px;}
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px;}
+  .kpi .label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:8px;}
+  .kpi .value{font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:700;}
+  .kpi .sub{font-size:11px; color:var(--muted); margin-top:4px;}
+
+  .hero{display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:28px;}
+  @media (max-width:760px){ .hero{grid-template-columns:1fr;} .kpi-row{grid-template-columns:repeat(2,1fr);} }
+  .hero-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; text-align:center;}
+  .hero-card .tag{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase;}
+  .hero-card .big{font-family:'IBM Plex Mono',monospace; font-size:52px; font-weight:700; margin:8px 0 4px;}
+  .hero-card.pre .big{color:var(--critical);}
+  .hero-card.post .big{color:var(--safe);}
+  .hero-card .desc{font-size:12px; color:var(--muted);}
+  .arrow-mid{display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--muted); grid-column:span 2; margin:-8px 0;}
+  @media (max-width:760px){ .arrow-mid{display:none;} }
+
+  .section-title{font-size:13px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); font-weight:600; margin:32px 0 14px;}
+
+  table{width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  th, td{padding:12px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--line);}
+  th{color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em;}
+  tr:last-child td{border-bottom:none;}
+  td.mono, th.mono{font-family:'IBM Plex Mono',monospace;}
+  .tag-scope{font-family:'IBM Plex Mono',monospace; font-size:10px; padding:3px 8px; border-radius:5px; border:1px solid var(--warn); color:var(--warn);}
+  .tag-active{font-family:'IBM Plex Mono',monospace; font-size:10px; padding:3px 8px; border-radius:5px; border:1px solid var(--safe); color:var(--safe);}
+  .bar-cell{width:160px;}
+  .bar-track{background:#152442; border-radius:4px; height:8px; overflow:hidden;}
+  .bar-fill{height:100%; border-radius:4px;}
+  .bar-fill.pre{background:var(--critical);}
+  .bar-fill.post{background:var(--safe);}
+  .evidence{font-size:11px; color:var(--muted); font-style:italic;}
+
+  .note-box{background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--warn); border-radius:8px;
+    padding:14px 18px; font-size:12px; color:var(--muted); margin:20px 0;}
+  .note-box b{color:var(--text);}
+
+  .ai-section{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:22px; margin-top:14px;}
+  .ai-header{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;}
+  .ai-desc{font-size:12px; color:var(--muted); max-width:520px;}
+  .btn{font-family:'IBM Plex Mono',monospace; font-size:12px; padding:9px 16px; border-radius:8px; border:1px solid var(--safe);
+    background:rgba(51,209,122,0.08); color:var(--safe); cursor:pointer; transition:background .15s;}
+  .btn:hover{background:rgba(51,209,122,0.18);}
+  .btn:disabled{opacity:0.5; cursor:wait;}
+  .btn.secondary{border-color:var(--muted); color:var(--muted); background:transparent;}
+  .btn.secondary:hover{background:rgba(133,147,184,0.1);}
+  .hypothesis-card{background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px;}
+  .hypothesis-card .name{font-weight:600; font-size:14px; margin-bottom:6px;}
+  .hypothesis-card .gap{font-size:12px; color:var(--muted); margin-bottom:10px;}
+  .hypothesis-card .meta{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--warn); margin-bottom:10px;}
+  .recalc-result{margin-top:10px; padding:12px; background:rgba(51,209,122,0.06); border:1px solid var(--safe);
+    border-radius:8px; font-size:12px;}
+  .recalc-result.increase{background:rgba(255,92,77,0.08); border-color:var(--critical);}
+  .recalc-result .num{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:16px;}
+  .source-tag{font-family:'IBM Plex Mono',monospace; font-size:10px; padding:2px 8px; border-radius:5px;
+    border:1px solid var(--line); color:var(--muted);}
+  .loading-text{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted);}
+
+  footer{margin-top:40px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); text-align:center;}
+  .empty-state{text-align:center; padding:60px 20px; color:var(--muted); font-family:'IBM Plex Mono',monospace;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">TC2 · Seguridad de Software · Caso 4</div>
+    <h1>Validación Analítica &amp; Telemetría — Plataforma PAYME</h1>
+  </div>
+  <div class="status-pill live mono" id="status-pill">● cargando telemetría</div>
+</header>
+
+<div id="content"></div>
+
+<div class="section-title">Uso Avanzado de IA — Red Teamer Virtual (embebido, en vivo)</div>
+<div class="ai-section">
+  <div class="ai-header">
+    <div class="ai-desc">
+      Este agente vive dentro de la arquitectura (servicio <code>ai_agent</code>) y se invoca en vivo,
+      no es un script aparte. Propone hipótesis de abuso no cubiertas por el árbol actual, cada una con
+      P(s) y C(a) estimados, y puede <b>forzar el recálculo</b> de P(R_T) incorporándolas como una rama OR adicional.
+    </div>
+    <button class="btn" id="btn-red-team" onclick="runRedTeam()">🔴 Generar hipótesis de ataque (IA)</button>
+  </div>
+  <div id="red-team-results"></div>
+
+  <div style="border-top:1px solid var(--line); margin:18px 0; padding-top:16px;">
+    <div class="ai-header">
+      <div class="ai-desc">Analiza el Audit Log Store (D2) en vivo, buscando patrones sospechosos
+        (intentos de SQLi bloqueados, violaciones de integridad este-oeste, etc.) y sugiere una mitigación secundaria.</div>
+      <button class="btn secondary" id="btn-analyze-logs" onclick="runAnalyzeLogs()">🔍 Analizar logs de auditoría (IA)</button>
+    </div>
+    <div id="analyze-logs-results"></div>
+  </div>
+</div>
+
+<footer>árbol de ataque cuantitativo (QAT) · semianillo probabilístico D = ([0,1], max, ·) · Lopuhaä-Zwakenberg et al. (2023)</footer>
+
+<script>
+function fmtPct(x){ return (x*100).toFixed(1) + '%'; }
+function fmtUsd(x){ return '$' + Number(x).toLocaleString('en-US', {maximumFractionDigits:0}); }
+
+function nodeRow(nombre, pPre, pPost, costo, scopeLabel, isFixed) {
+  const prePct = (pPre*100).toFixed(2);
+  const postPct = pPost !== null ? (pPost*100).toFixed(2) : prePct;
+  const scopeTag = isFixed
+    ? `<span class="tag-scope">FUERA DE ALCANCE POC</span>`
+    : `<span class="tag-active">VALIDADO EN POC</span>`;
+  return `
+    <tr>
+      <td><b>${nombre}</b><br><span class="evidence">${scopeLabel}</span></td>
+      <td class="mono">${prePct}%</td>
+      <td class="bar-cell"><div class="bar-track"><div class="bar-fill pre" style="width:${Math.min(prePct,100)}%"></div></div></td>
+      <td class="mono">${postPct}%</td>
+      <td class="bar-cell"><div class="bar-track"><div class="bar-fill post" style="width:${Math.min(postPct,100)}%"></div></div></td>
+      <td class="mono">$${costo}</td>
+      <td>${scopeTag}</td>
+    </tr>`;
+}
+
+function basRow(nombre, bas) {
+  const eff = (bas.efectividad_medida*100).toFixed(0);
+  return `
+    <tr>
+      <td><b>${nombre}</b></td>
+      <td class="mono">${(bas.p_pre*100).toFixed(1)}%</td>
+      <td class="mono">${(bas.p_post*100).toFixed(2)}%</td>
+      <td class="mono">${eff}%</td>
+      <td class="evidence">${bas.evidencia}</td>
+    </tr>`;
+}
+
+async function load() {
+  const statusPill = document.getElementById('status-pill');
+  const content = document.getElementById('content');
+  try {
+    const res = await fetch('/api/metrics');
+    if (!res.ok) throw new Error('sin datos');
+    const data = await res.json();
+    statusPill.textContent = '● telemetría cargada';
+
+    const raiz = data.raiz_compromiso_total;
+    const ale = data.impacto_financiero_ale;
+    const arbol = data.arbol;
+
+    content.innerHTML = `
+      <div class="hero">
+        <div class="hero-card pre">
+          <div class="tag">Pre-Mitigación (Baseline, Informe Sección 4)</div>
+          <div class="big">${fmtPct(raiz.p_rt_pre)}</div>
+          <div class="desc">P(R_T) — Probabilidad de Compromiso Total</div>
+        </div>
+        <div class="hero-card post">
+          <div class="tag">Post-Mitigación (Riesgo Residual medido en el PoC)</div>
+          <div class="big">${fmtPct(raiz.p_rt_post)}</div>
+          <div class="desc">Reducción: ${raiz.reduccion_absoluta_pp} pp (&minus;${raiz.reduccion_relativa_pct}% relativo)</div>
+        </div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">Inversión mínima del atacante</div>
+          <div class="value">$120</div>
+          <div class="sub">Ruta más barata (Nodo C — Disrupción)</div>
+        </div>
+        <div class="kpi">
+          <div class="label">ALE Pre-Mitigación</div>
+          <div class="value" style="color:var(--critical)">${fmtUsd(ale.ale_pre_usd)}</div>
+          <div class="sub">P(R_T) pre × $5.56M (IBM 2025)</div>
+        </div>
+        <div class="kpi">
+          <div class="label">ALE Post-Mitigación</div>
+          <div class="value" style="color:var(--safe)">${fmtUsd(ale.ale_post_usd)}</div>
+          <div class="sub">+ riesgo regulatorio Ley N° 29733 (no cuantificado)</div>
+        </div>
+      </div>
+
+      <div class="note-box">
+        <b>Nota metodológica:</b> ${data.metodologia}
+      </div>
+
+      <div class="section-title">Desglose de la Ruta Crítica (Nodos del Árbol de Ataque)</div>
+      <table>
+        <thead><tr>
+          <th>Nodo</th><th class="mono">P pre</th><th></th><th class="mono">P post</th><th></th><th class="mono">Costo</th><th>Estado</th>
+        </tr></thead>
+        <tbody>
+          ${nodeRow('Nodo A — Suplantación (AND)', arbol.nodo_A_suplantacion.probabilidad, null, arbol.nodo_A_suplantacion.costo_usd, arbol.nodo_A_suplantacion.estado, true)}
+          ${nodeRow('Nodo B — Manipulación Técnica (OR)', arbol.nodo_B_manipulacion_tecnica.probabilidad_pre, arbol.nodo_B_manipulacion_tecnica.probabilidad_post, arbol.nodo_B_manipulacion_tecnica.costo_usd, 'Tampering API Gateway + Inyección SQL', false)}
+          ${nodeRow('Nodo C — Disrupción y Ocultamiento (OR)', arbol.nodo_C_disrupcion_ocultamiento.probabilidad_pre, arbol.nodo_C_disrupcion_ocultamiento.probabilidad_post, arbol.nodo_C_disrupcion_ocultamiento.costo_usd, 'DDoS + Manipulación de Logs', false)}
+          ${nodeRow('Nodo D — Fuga de Información (OR)', arbol.nodo_D_fuga_informacion.probabilidad, null, arbol.nodo_D_fuga_informacion.costo_usd, arbol.nodo_D_fuga_informacion.estado, true)}
+        </tbody>
+      </table>
+
+      <div class="section-title">Datos Atómicos (BAS) — Efectividad Empírica Medida en el PoC</div>
+      <table>
+        <thead><tr>
+          <th>BAS</th><th class="mono">P(s) pre</th><th class="mono">P(s) post</th><th class="mono">Efectividad</th><th>Evidencia empírica</th>
+        </tr></thead>
+        <tbody>
+          ${basRow('BAS3 — Tampering API Gateway', arbol.nodo_B_manipulacion_tecnica.bas3_tampering_gateway)}
+          ${basRow('BAS4 — Inyección SQL en RDS', arbol.nodo_B_manipulacion_tecnica.bas4_sqli_rds)}
+          ${basRow('BAS5 — DDoS en NAT Gateway', arbol.nodo_C_disrupcion_ocultamiento.bas5_ddos_nat)}
+          ${basRow('BAS6 — Manipulación de Logs (D2)', arbol.nodo_C_disrupcion_ocultamiento.bas6_log_tampering)}
+        </tbody>
+      </table>
+    `;
+
+  } catch (e) {
+    console.error('Error cargando metrics:', e);
+    statusPill.textContent = '● sin datos';
+    content.innerHTML = `<div class="empty-state">Aún no hay telemetría.<br>Corre <b>./run_full_demo.sh</b> para generar metrics/results.json</div>`;
+  }
+}
+load();
+
+async function runRedTeam() {
+  const btn = document.getElementById('btn-red-team');
+  const out = document.getElementById('red-team-results');
+  btn.disabled = true;
+  out.innerHTML = `<p class="loading-text">● consultando al Red Teamer Virtual (ai_agent)...</p>`;
+  try {
+    const res = await fetch('/api/red-team', { method: 'POST' });
+    const data = await res.json();
+    const cases = data.abuse_cases || [];
+    window.__redTeamCases = cases;
+    const sourceLabel = data.source === 'anthropic_llm' ? 'Claude (LLM en vivo)' : 'modo heurístico (sin API key)';
+
+    out.innerHTML = `
+      <div style="margin-bottom:10px;"><span class="source-tag">fuente: ${sourceLabel}</span></div>
+      ${cases.map((c, i) => `
+        <div class="hypothesis-card" id="hyp-${i}">
+          <div class="name">${c.name}</div>
+          <div class="gap"><b>${c.componente || ''}</b> — ${c.gap || ''}</div>
+          <div class="meta">P(s) estimado: ${(c.p_estimate*100).toFixed(1)}% · C(a) estimado: $${c.c_estimate_usd}</div>
+          <button class="btn" onclick="recalculateWithHypothesis(${i})">⚡ Recalcular P(R_T) con esta hipótesis</button>
+          <div id="recalc-${i}"></div>
+        </div>
+      `).join('')}
+    `;
+  } catch (e) {
+    out.innerHTML = `<p class="loading-text">Error consultando al agente: ${e}</p>`;
+  }
+  btn.disabled = false;
+}
+
+async function recalculateWithHypothesis(i) {
+  const hypothesis = window.__redTeamCases[i];
+  const target = document.getElementById(`recalc-${i}`);
+  target.innerHTML = `<p class="loading-text">● recalculando árbol de ataque...</p>`;
+  try {
+    const res = await fetch('/api/recalculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(hypothesis)
+    });
+    const r = await res.json();
+    const increased = r.incremento_absoluto_pp > 0;
+    target.innerHTML = `
+      <div class="recalc-result ${increased ? 'increase' : ''}">
+        P(R_T) actual: <span class="num">${(r.p_rt_antes_de_hipotesis*100).toFixed(2)}%</span>
+        &rarr; con esta hipótesis: <span class="num">${(r.p_rt_con_hipotesis*100).toFixed(2)}%</span>
+        (${increased ? '+' : ''}${r.incremento_absoluto_pp} pp)<br>
+        ALE con hipótesis: <b>$${Number(r.ale_con_hipotesis_usd).toLocaleString('en-US')}</b><br>
+        <span style="color:var(--muted); font-style:italic;">${r.recomendacion}</span>
+      </div>
+    `;
+  } catch (e) {
+    target.innerHTML = `<p class="loading-text">Error recalculando: ${e}</p>`;
+  }
+}
+
+async function runAnalyzeLogs() {
+  const btn = document.getElementById('btn-analyze-logs');
+  const out = document.getElementById('analyze-logs-results');
+  btn.disabled = true;
+  out.innerHTML = `<p class="loading-text">● analizando audit log store (D2)...</p>`;
+  try {
+    const res = await fetch('/api/analyze-logs');
+    const r = await res.json();
+    if (r.error) {
+      out.innerHTML = `<p class="loading-text">${r.error}</p>`;
+    } else {
+      const flag = r.suspicious_pattern_detected;
+      out.innerHTML = `
+        <div class="hypothesis-card">
+          <div class="meta" style="color:${flag ? 'var(--critical)' : 'var(--safe)'}">
+            ${flag ? '⚠ Patrón sospechoso detectado' : '✓ Sin patrones sospechosos'}
+          </div>
+          <div class="gap">Conteo de eventos: ${JSON.stringify(r.event_counts)}</div>
+          <div class="gap"><b>Mitigación secundaria sugerida:</b> ${r.suggested_secondary_mitigation}</div>
+        </div>
+      `;
+    }
+  } catch (e) {
+    out.innerHTML = `<p class="loading-text">Error: ${e}</p>`;
+  }
+  btn.disabled = false;
+}
+</script>
+</body>
+</html>
